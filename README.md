@@ -22,11 +22,11 @@ Chest radiography is among the most common and vital diagnostic imaging modaliti
 - **Genuine Pretrained Model Inference:** Runs real PyTorch forward passes on CPU/GPU using verified weights (`densenet121-res224-all`, 28.38 MB). No fabricated predictions, mock data, or hardcoded scores.
 - **Radiology-Specific Preprocessing:** Implements exact intensity normalization ($[-1024, 1024]$) and aspect-ratio preserving center crop/resizing ($224 \times 224$ px).
 - **18-Class Radiographic Evaluation:** Analyzes 18 distinct findings including Atelectasis, Cardiomegaly, Consolidation, Effusion, Infiltration, Pneumonia, and Pneumothorax.
-- **Calibrated Operating Thresholds:** Normalizes model outputs against clinical operating points to distinguish elevated likelihoods from sub-threshold baseline findings.
+- **Operating-Point Normalized Scores:** Rescales model outputs relative to precomputed empirical operating thresholds (0.50 = operating threshold) using TorchXRayVision's `op_norm`.
 - **Safe In-Memory Processing:** Images are validated and processed in volatile memory (`io.BytesIO`). Zero persistence of patient images or private metadata.
 - **Educational Sample Included:** Ships with a verified public-access educational sample radiograph from NIH ChestX-ray14 for instant testing without requiring private scans.
 - **Prominent Educational Disclaimer:** Emphasizes that statistical model predictions are **not** clinical diagnoses and cannot replace qualified healthcare practitioners.
-- **Comprehensive Automated Testing:** 20 automated unit and smoke tests covering validation, corrupted files, tensor transformations, mock inference, and real-weight forward passes.
+- **Comprehensive Automated Testing:** 21 automated unit and smoke tests covering validation, corrupted files, tensor transformations, mock inference, neutral score logic, and real-weight forward passes.
 
 ---
 
@@ -127,7 +127,7 @@ Open your browser and navigate to `http://localhost:8501`.
 
 ## 7. Running the Automated Test Suite
 
-Execute the full suite of 20 unit and integration tests:
+Execute the full suite of 21 unit and integration tests:
 
 ```bash
 pytest -v
@@ -135,28 +135,29 @@ pytest -v
 
 ### Actual Test Execution Output:
 ```text
-tests/test_image_utils.py::TestImageValidation::test_valid_png_image PASSED          [  5%]
-tests/test_image_utils.py::TestImageValidation::test_valid_jpeg_image PASSED         [ 10%]
-tests/test_image_utils.py::TestImageValidation::test_empty_input_rejected PASSED     [ 15%]
-tests/test_image_utils.py::TestImageValidation::test_oversized_input_rejected PASSED [ 20%]
-tests/test_image_utils.py::TestImageValidation::test_unsupported_extension_rejected PASSED [ 25%]
-tests/test_image_utils.py::TestImageValidation::test_corrupted_image_rejected PASSED [ 30%]
-tests/test_image_utils.py::TestImageValidation::test_invalid_dimensions_too_small PASSED [ 35%]
-tests/test_image_utils.py::TestImageValidation::test_case_insensitive_extension PASSED [ 40%]
-tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_output_shape PASSED [ 45%]
-tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_rgb_to_single_channel PASSED [ 50%]
-tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_normalization_range PASSED [ 55%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_valid PASSED [ 60%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_non_tensor PASSED [ 65%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_dimensions PASSED [ 70%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_channels PASSED [ 75%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_spatial_resolution PASSED [ 80%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_run_inference_with_mock_model PASSED [ 85%]
+tests/test_image_utils.py::TestImageValidation::test_valid_png_image PASSED          [  4%]
+tests/test_image_utils.py::TestImageValidation::test_valid_jpeg_image PASSED         [  9%]
+tests/test_image_utils.py::TestImageValidation::test_empty_input_rejected PASSED     [ 14%]
+tests/test_image_utils.py::TestImageValidation::test_oversized_input_rejected PASSED [ 19%]
+tests/test_image_utils.py::TestImageValidation::test_unsupported_extension_rejected PASSED [ 23%]
+tests/test_image_utils.py::TestImageValidation::test_corrupted_image_rejected PASSED [ 28%]
+tests/test_image_utils.py::TestImageValidation::test_invalid_dimensions_too_small PASSED [ 33%]
+tests/test_image_utils.py::TestImageValidation::test_case_insensitive_extension PASSED [ 38%]
+tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_output_shape PASSED [ 42%]
+tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_rgb_to_single_channel PASSED [ 47%]
+tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_normalization_range PASSED [ 52%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_valid PASSED [ 57%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_non_tensor PASSED [ 61%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_dimensions PASSED [ 66%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_channels PASSED [ 71%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_spatial_resolution PASSED [ 76%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_run_inference_with_mock_model PASSED [ 80%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_score_interpretation_and_threshold_logic PASSED [ 85%]
 tests/test_model_utils.py::TestModelValidationAndInference::test_inference_exception_handling PASSED [ 90%]
 tests/test_model_utils.py::TestModelValidationAndInference::test_unexpected_output_shape_handling PASSED [ 95%]
 tests/test_model_utils.py::TestRealPretrainedModelInference::test_real_model_loading_and_inference PASSED [100%]
 
-======================= 20 passed, 8 warnings in 17.70s =======================
+======================= 21 passed, 8 warnings in 31.63s =======================
 ```
 
 ---

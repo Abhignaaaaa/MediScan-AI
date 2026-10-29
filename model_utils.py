@@ -4,7 +4,8 @@ model_utils.py - Pretrained model loading, inference, and output interpretation 
 This module encapsulates the TorchXRayVision DenseNet-121 architecture ('densenet121-res224-all')
 trained across multiple clinical chest radiograph datasets (NIH, CheXpert, MIMIC-CXR, PadChest,
 Google OpenI, RSNA). It guarantees strict evaluation mode, disables gradient tracking,
-validates tensor input/output shapes, and formats predictions with clinical transparency.
+validates tensor input/output shapes, and formats predictions using neutral, mathematically
+accurate model score definitions without claiming calibrated clinical probabilities.
 """
 
 from __future__ import annotations
@@ -163,19 +164,23 @@ def run_inference(
 
     Returns structured results including:
         - pathology: Name of radiographic finding.
-        - normalized_score: Score normalized against the dataset's calibrated operating point [0, 1],
-          where >= 0.50 indicates the model's calibrated decision threshold was reached.
-        - raw_probability: The raw sigmoid probability output.
-        - operating_threshold: The dataset-calibrated operating threshold.
+        - normalized_score: Operating-point rescaled model score in [0.0, 1.0] where 0.50
+          corresponds to the empirical operating threshold. This is a piecewise-linear
+          threshold-normalized model score, NOT a calibrated clinical probability of disease.
+        - raw_sigmoid: The uncalibrated logistic sigmoid output sigma(z) in [0.0, 1.0].
+        - raw_probability: Alias for raw_sigmoid preserved for interface compatibility.
+        - operating_threshold: The per-pathology decision threshold defined for the weights.
         - description: Plain-language educational explanation of the finding.
-        - status: Qualitative indicator based on the operating threshold.
+        - status: Neutral threshold indicator ('Exceeds Operating Threshold' or 'Below Operating Threshold').
+        - is_above_threshold: Boolean indicating whether normalized_score >= 0.50.
+        - is_elevated: Alias for is_above_threshold.
 
     Args:
         model: Pretrained TorchXRayVision model.
         tensor: Validated 4D input tensor of shape (1, 1, 224, 224).
 
     Returns:
-        Dictionary containing model metadata, top findings, and complete class breakdown.
+        Dictionary containing model metadata, findings exceeding threshold, and complete breakdown.
 
     Raises:
         ModelInferenceError: If inference fails or output dimensions are unexpected.
@@ -189,10 +194,10 @@ def run_inference(
             # DenseNet with op_threshs outputs normalized values where 0.5 is the operating point
             norm_outputs = model(tensor)  # Shape: (1, 18)
 
-            # 2. Compute raw sigmoid probabilities from features and classifier
+            # 2. Compute uncalibrated sigmoid outputs from features and classifier
             features = model.features2(tensor)
             raw_logits = model.classifier(features)
-            raw_probs = torch.sigmoid(raw_logits)
+            raw_sigmoid_vals = torch.sigmoid(raw_logits)
 
     except Exception as err:
         raise ModelInferenceError(f"Inference execution failed: {str(err)}") from err
@@ -210,30 +215,32 @@ def run_inference(
     findings: List[Dict[str, Any]] = []
     for idx, name in enumerate(pathologies):
         norm_score = float(norm_outputs[0, idx].item())
-        raw_prob = float(raw_probs[0, idx].item())
+        raw_sigmoid = float(raw_sigmoid_vals[0, idx].item())
         thresh = op_threshs[idx] if idx < len(op_threshs) else 0.5
-        is_elevated = norm_score >= 0.50
+        is_above_thresh = norm_score >= 0.50
 
         findings.append({
             "pathology": name,
             "normalized_score": round(norm_score, 4),
-            "raw_probability": round(raw_prob, 4),
+            "raw_sigmoid": round(raw_sigmoid, 4),
+            "raw_probability": round(raw_sigmoid, 4),  # Backwards-compatible alias
             "operating_threshold": round(thresh, 4),
-            "status": "Elevated Radiographic Likelihood" if is_elevated else "Below Operating Threshold",
-            "is_elevated": is_elevated,
+            "status": "Exceeds Operating Threshold (Score >= 0.50)" if is_above_thresh else "Below Operating Threshold (Score < 0.50)",
+            "is_above_threshold": is_above_thresh,
+            "is_elevated": is_above_thresh,
             "description": PATHOLOGY_DESCRIPTIONS.get(name, "Radiographic finding on chest X-ray."),
         })
 
     # Sort findings by normalized score descending
     findings_sorted = sorted(findings, key=lambda x: x["normalized_score"], reverse=True)
 
-    # Filter findings that exceed the calibrated operating threshold (score >= 0.50)
-    elevated_findings = [f for f in findings_sorted if f["is_elevated"]]
+    # Filter findings that meet or exceed the operating threshold (score >= 0.50)
+    findings_above_threshold = [f for f in findings_sorted if f["is_above_threshold"]]
 
     return {
         "model_name": MODEL_NAME,
         "total_classes": NUM_CLASSES,
-        "elevated_count": len(elevated_findings),
-        "elevated_findings": elevated_findings,
+        "elevated_count": len(findings_above_threshold),
+        "elevated_findings": findings_above_threshold,
         "all_findings": findings_sorted,
     }

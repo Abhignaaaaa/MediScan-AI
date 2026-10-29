@@ -97,8 +97,42 @@ class TestModelValidationAndInference:
         top_finding = results["all_findings"][0]
         assert top_finding["pathology"] == "Cardiomegaly"
         assert top_finding["normalized_score"] == 0.72
+        assert top_finding["is_above_threshold"] is True
         assert top_finding["is_elevated"] is True
+        assert "Exceeds Operating Threshold" in top_finding["status"]
         assert "Cardiomegaly" in results["elevated_findings"][0]["pathology"]
+
+    def test_score_interpretation_and_threshold_logic(self):
+        """Verifies neutral score interpretation and exact threshold categorization."""
+        mock_model = MockDenseNet()
+        tensor = torch.zeros((1, 1, 224, 224))
+
+        results = run_inference(mock_model, tensor)
+
+        for finding in results["all_findings"]:
+            # Check presence of neutral score fields
+            assert "normalized_score" in finding
+            assert "raw_sigmoid" in finding
+            assert "raw_probability" in finding
+            assert "operating_threshold" in finding
+            assert "status" in finding
+            assert "is_above_threshold" in finding
+
+            # Verify range bounds
+            assert 0.0 <= finding["normalized_score"] <= 1.0
+            assert 0.0 <= finding["raw_sigmoid"] <= 1.0
+            assert finding["raw_sigmoid"] == finding["raw_probability"]
+
+            # Threshold logic check
+            if finding["normalized_score"] >= 0.50:
+                assert finding["is_above_threshold"] is True
+                assert "Exceeds Operating Threshold" in finding["status"]
+            else:
+                assert finding["is_above_threshold"] is False
+                assert "Below Operating Threshold" in finding["status"]
+
+            # Ensure descriptions remain descriptive and non-alarming
+            assert len(finding["description"]) > 10
 
     def test_inference_exception_handling(self):
         """Verifies that model runtime errors raise ModelInferenceError."""
@@ -144,5 +178,11 @@ class TestRealPretrainedModelInference:
         assert len(results["all_findings"]) == NUM_CLASSES
         for finding in results["all_findings"]:
             assert 0.0 <= finding["normalized_score"] <= 1.0
+            assert 0.0 <= finding["raw_sigmoid"] <= 1.0
             assert 0.0 <= finding["raw_probability"] <= 1.0
+            assert finding["raw_sigmoid"] == finding["raw_probability"]
             assert finding["pathology"] in model.pathologies
+            if finding["normalized_score"] >= 0.50:
+                assert finding["is_above_threshold"] is True
+            else:
+                assert finding["is_above_threshold"] is False

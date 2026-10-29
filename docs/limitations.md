@@ -29,8 +29,9 @@ MediScan AI is strictly an educational research prototype. Understanding the fun
 ---
 
 ## 4. Probabilistic Confidence vs. Clinical Certainty
-- **Confidence Calibration:** Neural network output values ($\sigma(z)$) represent statistical likelihoods under a specific mathematical optimization function (Binary Cross-Entropy), **not** the clinical probability that a patient has a condition.
-- **Threshold Sensitivity:** Radiographic findings operate at varied empirical thresholds. A high numerical probability can occur in an ambiguous scan due to over-confidence, while genuine subtle pathology (e.g., early-stage pneumonia or small pneumothorax) may produce a low score.
+- **Lack of Probability Calibration:** Neither the raw sigmoid activation ($\sigma(z)$) nor the threshold-normalized score produced by TorchXRayVision's `op_norm` is a calibrated clinical probability. Standard cross-entropy optimization does not yield calibrated posterior probabilities for imbalanced medical findings.
+- **Rescaling Semantics:** The normalized score is a piecewise linear rescaling that sets the decision threshold at 0.50. It does not reflect the likelihood or prevalence of disease in a given clinical population.
+- **Threshold Sensitivity:** Radiographic findings operate at varied empirical thresholds. High model activation in an ambiguous scan can result from visual artifacts or over-confidence, while genuine subtle pathology (e.g., early-stage pneumonia or tiny apical pneumothorax) may produce a low score.
 - **Independence Assumption:** In multi-label sigmoid classification, output classes are treated as mathematically independent, whereas anatomical pathologies in human physiology are heavily interrelated (e.g., congestive heart failure simultaneously manifesting as cardiomegaly, pulmonary edema, and pleural effusion).
 
 ---

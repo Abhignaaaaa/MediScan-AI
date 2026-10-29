@@ -69,11 +69,13 @@ The model outputs simultaneous predictions for 18 distinct radiological classes:
 ---
 
 ## 6. Output Calibration & Operating Scores
-- **Raw Output:** Raw linear logits $z_i \in (-\infty, \infty)$ converted to sigmoid probabilities $\sigma(z_i) \in [0, 1]$.
-- **Operating Point Normalization:** Because individual pathologies occur at vastly different natural prevalences (e.g., Pneumothorax $\approx 1\%$, Cardiomegaly $\approx 8\%$), raw probabilities cannot be thresholded at a naive 0.50. TorchXRayVision computes empirical operating thresholds $\theta_i$ for each pathology based on validation F1/ROC performance.
-- **MediScan AI Normalization:** Outputs are mapped into a standardized $[0.0, 1.0]$ score where $0.50$ represents the calibrated decision threshold:
-  - $\text{Score} \ge 0.50$: Model detects radiographic patterns exceeding the calibrated sensitivity/specificity operating threshold for that pathology.
-  - $\text{Score} < 0.50$: Radiographic features remain below the operating threshold.
+- **Raw Sigmoid Output:** Raw linear logits $z_i \in (-\infty, \infty)$ converted via the standard logistic sigmoid function $\sigma(z_i) = \frac{1}{1 + e^{-z_i}} \in [0, 1]$. Because multi-label models trained with binary cross-entropy on imbalanced data are not post-calibrated, these values represent uncalibrated network activations, not clinical disease probabilities.
+- **Operating-Point Normalization (`op_norm`):** In clinical chest radiography, individual pathologies exhibit vastly different natural prevalences (e.g., Pneumothorax $\approx 1\%$, Cardiomegaly $\approx 8\%$). Standard classification thresholds (e.g., a naive 0.50 threshold on raw sigmoid output) are not suitable. TorchXRayVision provides empirical operating thresholds $\theta_i$ for each pathology.
+- **Piecewise Linear Scaling:** The `op_norm` function applies a piecewise linear transformation to re-scale outputs such that the operating threshold $\theta_i$ maps directly to $0.50$:
+  $$\text{score} = \begin{cases} \frac{\sigma(z_i)}{2 \cdot \theta_i} & \text{if } \sigma(z_i) < \theta_i \\ 1.0 - \frac{1.0 - \sigma(z_i)}{2 \cdot (1 - \theta_i)} & \text{if } \sigma(z_i) \ge \theta_i \end{cases}$$
+  - $\text{Score} \ge 0.50$: The model activation meets or exceeds the empirical operating point threshold for that finding.
+  - $\text{Score} < 0.50$: The model activation is below the operating point threshold.
+- **Limitation Documentation:** Neither the normalized score nor the raw sigmoid output is a calibrated clinical probability. High scores indicate that the model's convolutional feature activations match radiographic patterns associated with the finding in the training corpora; they do not establish that the patient has the disease.
 
 ---
 

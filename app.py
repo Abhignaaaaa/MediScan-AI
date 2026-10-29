@@ -159,10 +159,11 @@ def render_sidebar():
         st.header("Interpretation Guide")
         st.markdown(
             """
-            - **Operating Score (0.0 to 1.0):** Normalized against the dataset-calibrated decision threshold.
-            - **Score ≥ 0.50:** Radiographic pattern exceeds the model's operating point threshold for this class.
-            - **Score < 0.50:** Model output is below the calibrated threshold.
-            - *Note:* Probability ≠ clinical truth. High likelihood does not establish disease presence.
+            - **Normalized Model Score (0.0 to 1.0):** Output rescaled by TorchXRayVision `op_norm` so that the empirical operating threshold $\\theta$ maps to $0.50$.
+            - **Score ≥ 0.50:** The model output meets or exceeds the empirical operating point threshold for this class.
+            - **Score < 0.50:** The model output is below the empirical operating point threshold.
+            - **Raw Sigmoid Output (0.0 to 1.0):** Direct uncalibrated logistic sigmoid activation $\\sigma(z) = \\frac{1}{1 + e^{-z}}$.
+            - **⚠️ Key Limitation:** Neither score represents a calibrated disease probability. They are mathematical activations reflecting learned radiographic patterns, not confirmed diagnoses or clinical likelihoods.
             """
         )
 
@@ -273,38 +274,38 @@ def main():
             if elevated_count > 0:
                 st.warning(
                     f"⚠️ The model identified **{elevated_count} radiographic pattern(s)** "
-                    f"exceeding the dataset operating threshold (score ≥ 0.50)."
+                    f"meeting or exceeding the empirical operating threshold (score ≥ 0.50)."
                 )
             else:
                 st.success(
-                    "✅ No radiographic findings exceeded the calibrated operating point threshold "
+                    "✅ No radiographic findings met or exceeded the empirical operating threshold "
                     "(all scores < 0.50)."
                 )
 
-            # Two tabs: Elevated Findings and Complete Breakdown
+            # Three tabs: Findings Exceeding Threshold, Complete Breakdown, and Technical Details
             tab_summary, tab_all, tab_tech = st.tabs([
-                "📊 Elevated Findings",
+                "📊 Findings Exceeding Threshold",
                 "📋 All 18 Evaluated Pathologies",
                 "🔬 Technical & Preprocessing Details"
             ])
 
             with tab_summary:
                 if elevated_count == 0:
-                    st.info("No findings exceeded the operating threshold on this radiograph.")
+                    st.info("No findings exceeded the empirical operating threshold on this radiograph.")
                 else:
                     for f in results["elevated_findings"]:
-                        score_pct = int(f["normalized_score"] * 100)
+                        raw_sig = f.get("raw_sigmoid", f.get("raw_probability", 0.0))
                         st.markdown(
                             f"""
                             <div class="metric-card">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <h4 style="margin: 0; color: #1a365d;">{f['pathology']}</h4>
-                                    <span class="badge-elevated">Score: {f['normalized_score']:.2f} ({score_pct}%)</span>
+                                    <span class="badge-elevated">Normalized Score: {f['normalized_score']:.2f}</span>
                                 </div>
                                 <p style="margin: 0.5rem 0; color: #4a5568; font-size: 0.95rem;">{f['description']}</p>
                                 <div style="font-size: 0.85rem; color: #718096;">
-                                    <strong>Calibrated Operating Threshold:</strong> {f['operating_threshold']} | 
-                                    <strong>Raw Sigmoid Probability:</strong> {f['raw_probability']:.4f}
+                                    <strong>Operating Threshold (θ):</strong> {f['operating_threshold']} | 
+                                    <strong>Raw Sigmoid Output:</strong> {raw_sig:.4f}
                                 </div>
                             </div>
                             """,
@@ -312,15 +313,19 @@ def main():
                         )
 
             with tab_all:
-                st.markdown("Complete breakdown of all 18 evaluated radiological conditions:")
+                st.markdown(
+                    "Complete breakdown of all 18 evaluated radiological conditions. "
+                    "*Scores are uncalibrated model outputs and do not represent clinical disease probabilities.*"
+                )
                 table_data = []
                 for item in all_findings:
+                    raw_sig = item.get("raw_sigmoid", item.get("raw_probability", 0.0))
                     table_data.append({
                         "Radiographic Pathology": item["pathology"],
-                        "Normalized Score": f"{item['normalized_score']:.4f}",
-                        "Status": "⚠️ Elevated" if item["is_elevated"] else "Normal / Sub-threshold",
-                        "Raw Sigmoid Probability": f"{item['raw_probability']:.4f}",
-                        "Calibrated Threshold": f"{item['operating_threshold']:.4f}",
+                        "Normalized Model Score": f"{item['normalized_score']:.4f}",
+                        "Threshold Status": "⚠️ Exceeds Threshold (≥ 0.50)" if item.get("is_above_threshold", item.get("is_elevated", False)) else "Below Threshold (< 0.50)",
+                        "Raw Sigmoid Output": f"{raw_sig:.4f}",
+                        "Operating Threshold (θ)": f"{item['operating_threshold']:.4f}",
                         "Pathology Description": item["description"],
                     })
                 st.dataframe(table_data, use_container_width=True, hide_index=True)

@@ -20,9 +20,9 @@ flowchart TD
     J --> K["TorchXRayVision DenseNet-121 (weights: densenet121-res224-all)"]
     K --> L["Model Evaluation Mode (model.eval(), torch.no_grad())"]
     L --> M["Output Validation: Shape (1, 18)"]
-    M --> N["Score Calibration: Operating Threshold Normalization & Raw Sigmoid"]
+    M --> N["Score Formatting: Operating Threshold Normalization & Raw Sigmoid"]
     N --> O["UI Results Presentation (app.py)"]
-    O --> P["Elevated Findings (Score >= 0.50) + Full 18-Class Breakdown"]
+    O --> P["Findings Exceeding Operating Threshold (Score >= 0.50) + Full 18-Class Breakdown"]
 ```
 
 ---
@@ -59,10 +59,11 @@ flowchart TD
   - Enforces `torch.no_grad()` to prevent computation graph construction and memory leakage.
   - Validates tensor input shape `(batch, 1, 224, 224)` prior to forward pass.
   - Validates tensor output shape `(batch, 18)` following the forward pass.
-- **Operating-Point Calibration:**
-  - Computes both raw sigmoid probabilities $\sigma(z) \in [0, 1]$ and dataset-calibrated operating scores using piecewise linear mapping centered at 0.50:
+- **Operating-Point Rescaling:**
+  - Computes raw uncalibrated sigmoid outputs $\sigma(z) \in [0, 1]$ and operating-point normalized scores using TorchXRayVision's piecewise linear mapping centered at 0.50:
     $$\text{score} = \begin{cases} \frac{\sigma(z)}{2 \cdot \theta} & \text{if } \sigma(z) < \theta \\ 1.0 - \frac{1.0 - \sigma(z)}{2 \cdot (1 - \theta)} & \text{if } \sigma(z) \ge \theta \end{cases}$$
-    where $\theta$ is the empirical operating threshold for each pathology.
+    where $\theta$ is the empirical operating threshold defined for each pathology.
+  - Documents that neither score represents a calibrated disease probability.
   - Associates each pathology with plain-English anatomical explanations.
 
 ### 2.4 `tests/` (Automated Test Suite)

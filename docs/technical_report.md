@@ -41,7 +41,7 @@ During Phase 1 of development, three potential options were evaluated:
 - **Verified Provenance:** Developed by Cohen et al. (MIDL 2022) with open-access weights hosted on GitHub Releases and Hugging Face Hub.
 - **Permissive Open-Source Licensing:** Apache 2.0 license covers both library code and pretrained model weights.
 - **Multitask Radiographic Coverage:** Predicts 18 distinct radiological classes covering parenchymal, pleural, and mediastinal abnormalities.
-- **Calibrated Operating Thresholds:** Includes empirical decision thresholds computed from multi-center clinical validation cohorts.
+- **Empirical Operating Thresholds:** Includes precomputed operating-point decision thresholds evaluated across multi-center validation cohorts.
 - **Modest Computational Footprint:** 28.38 MB checkpoint executes seamlessly on standard consumer CPUs without requiring a dedicated GPU.
 
 ---
@@ -61,8 +61,8 @@ Chest radiographs differ substantially from standard consumer photographs. They 
 - **Evaluation Discipline:** Model is explicitly set to `model.eval()`, and all forward passes are wrapped in `torch.no_grad()`.
 - **Validation:** Enforces 4D tensor constraints `(batch, 1, 224, 224)` prior to calling the network.
 - **Dual-Metric Output Generation:**
-  - **Operating-Point Normalized Score:** Piecewise linear scaling around the empirical threshold $\theta_i$, mapping to $[0, 1]$ where $\ge 0.50$ signifies exceeding the operating threshold.
-  - **Raw Sigmoid Probability:** $\sigma(z_i) = \frac{1}{1 + e^{-z_i}}$.
+  - **Operating-Point Normalized Score:** Piecewise linear scaling around the empirical operating point $\theta_i$, mapping to $[0, 1]$ where $\ge 0.50$ signifies meeting or exceeding the operating threshold. This is an uncalibrated model score, not a clinical probability.
+  - **Raw Sigmoid Output:** $\sigma(z_i) = \frac{1}{1 + e^{-z_i}}$. Uncalibrated neural network output.
 - **Error Handling:** Gracefully handles missing weights, network timeouts, invalid shapes, and hardware exceptions.
 
 ---
@@ -78,32 +78,33 @@ Automated unit and integration tests were developed using `pytest`. Tests are se
 ============================= test session starts =============================
 platform win32 -- Python 3.13.1, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\bolla\Downloads\MediScan-AI
-collected 20 items
+collected 21 items
 
-tests/test_image_utils.py::TestImageValidation::test_valid_png_image PASSED          [  5%]
-tests/test_image_utils.py::TestImageValidation::test_valid_jpeg_image PASSED         [ 10%]
-tests/test_image_utils.py::TestImageValidation::test_empty_input_rejected PASSED     [ 15%]
-tests/test_image_utils.py::TestImageValidation::test_oversized_input_rejected PASSED [ 20%]
-tests/test_image_utils.py::TestImageValidation::test_unsupported_extension_rejected PASSED [ 25%]
-tests/test_image_utils.py::TestImageValidation::test_corrupted_image_rejected PASSED [ 30%]
-tests/test_image_utils.py::TestImageValidation::test_invalid_dimensions_too_small PASSED [ 35%]
-tests/test_image_utils.py::TestImageValidation::test_case_insensitive_extension PASSED [ 40%]
-tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_output_shape PASSED [ 45%]
-tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_rgb_to_single_channel PASSED [ 50%]
-tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_normalization_range PASSED [ 55%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_valid PASSED [ 60%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_non_tensor PASSED [ 65%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_dimensions PASSED [ 70%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_channels PASSED [ 75%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_spatial_resolution PASSED [ 80%]
-tests/test_model_utils.py::TestModelValidationAndInference::test_run_inference_with_mock_model PASSED [ 85%]
+tests/test_image_utils.py::TestImageValidation::test_valid_png_image PASSED          [  4%]
+tests/test_image_utils.py::TestImageValidation::test_valid_jpeg_image PASSED         [  9%]
+tests/test_image_utils.py::TestImageValidation::test_empty_input_rejected PASSED     [ 14%]
+tests/test_image_utils.py::TestImageValidation::test_oversized_input_rejected PASSED [ 19%]
+tests/test_image_utils.py::TestImageValidation::test_unsupported_extension_rejected PASSED [ 23%]
+tests/test_image_utils.py::TestImageValidation::test_corrupted_image_rejected PASSED [ 28%]
+tests/test_image_utils.py::TestImageValidation::test_invalid_dimensions_too_small PASSED [ 33%]
+tests/test_image_utils.py::TestImageValidation::test_case_insensitive_extension PASSED [ 38%]
+tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_output_shape PASSED [ 42%]
+tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_rgb_to_single_channel PASSED [ 47%]
+tests/test_image_utils.py::TestImagePreprocessing::test_preprocessing_normalization_range PASSED [ 52%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_valid PASSED [ 57%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_non_tensor PASSED [ 61%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_dimensions PASSED [ 66%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_channels PASSED [ 71%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_validate_input_tensor_invalid_spatial_resolution PASSED [ 76%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_run_inference_with_mock_model PASSED [ 80%]
+tests/test_model_utils.py::TestModelValidationAndInference::test_score_interpretation_and_threshold_logic PASSED [ 85%]
 tests/test_model_utils.py::TestModelValidationAndInference::test_inference_exception_handling PASSED [ 90%]
 tests/test_model_utils.py::TestModelValidationAndInference::test_unexpected_output_shape_handling PASSED [ 95%]
 tests/test_model_utils.py::TestRealPretrainedModelInference::test_real_model_loading_and_inference PASSED [100%]
 
-======================= 20 passed, 8 warnings in 17.70s =======================
+======================= 21 passed, 8 warnings in 31.63s =======================
 ```
-**Outcome:** 20 out of 20 tests passed successfully (100% pass rate).
+**Outcome:** 21 out of 21 tests passed successfully (100% pass rate).
 
 ---
 
@@ -113,9 +114,9 @@ tests/test_model_utils.py::TestRealPretrainedModelInference::test_real_model_loa
 - **Issue:** During the initial download of weights via `xrv.models.DenseNet(weights="...")`, the library's utility attempted to print a progress bar with a unicode block character `\u2588`, which caused a `UnicodeEncodeError: 'charmap' codec can't encode character` under the default Windows `cp1252` encoding.
 - **Resolution:** Implemented an independent, resilient weight downloader in `model_utils.py` (`ensure_weights_available`) utilizing Python's `urllib.request` that bypasses console encoding issues and verifies file size integrity before model instantiation.
 
-### Challenge 2: Operating Point Threshold vs. Raw Probability Interpretation
-- **Issue:** Raw sigmoid probabilities across clinical datasets often peak at low numerical values (e.g., 0.05 to 0.15) due to severe class imbalance in radiography. Displaying a raw 0.08 probability without context can mislead users into believing a condition is definitely absent when it actually exceeds the clinical sensitivity threshold.
-- **Resolution:** Extracted the empirical operating points (`op_threshs`) embedded in the pretrained model and developed a dual-score presentation in the Streamlit UI, clearly communicating both the operating-normalized score and the raw probability with plain-English definitions.
+### Challenge 2: Distinction Between Model Scores and Calibrated Clinical Probabilities
+- **Issue:** Neither raw sigmoid outputs nor `op_norm` rescaled outputs are calibrated probabilities of patient disease. Raw sigmoid outputs from binary cross-entropy on imbalanced data represent raw network activations, while `op_norm` is a piecewise linear rescaling designed solely to center operating thresholds at 0.50. Labeling either as "calibrated disease probabilities" is scientifically inaccurate and clinically misleading.
+- **Resolution:** Refactored the output interpretation schema across `model_utils.py`, `app.py`, and test suites to strictly use neutral mathematical terminology: "Normalized Model Score" (or "Operating Score") and "Raw Sigmoid Output". Added clear educational notices documenting that these values are uncalibrated model scores and cannot be interpreted as posterior probabilities of disease.
 
 ---
 
